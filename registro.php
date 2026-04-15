@@ -3,27 +3,42 @@
 /*error_reporting(E_ALL);
 ini_set('display_errors', 1);
 */
+// Requerimos el archivo de conexión. 'require' detendrá el script si db.php no existe.
 require 'db.php';
 $mensaje = '';
 
+// Verificamos si el formulario fue enviado haciendo clic en el botón (método POST)
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // trim() elimina los espacios en blanco al inicio y al final de lo que escribió el usuario
     $nombre = trim($_POST['nombre']);
     $correo = trim($_POST['correo']);
     $password = $_POST['password'];
 
+    // 1. Validación básica para evitar guardar campos vacíos
     if (empty($nombre) || empty($correo) || empty($password)) {
         $mensaje = "<div class='alert alert-danger'>Todos los campos son obligatorios.</div>";
     } else {
+        // 2. SEGURIDAD: Nunca guardamos contraseñas en texto plano (ej: "123456").
+        // password_hash usa el algoritmo de encriptación más fuerte disponible en tu versión de PHP (usualmente bcrypt).
         $password_hash = password_hash($password, PASSWORD_DEFAULT);
+
         try {
+            // 3. SEGURIDAD CONTRA INYECCIÓN SQL: Usamos sentencias preparadas (prepare).
+            // En lugar de meter las variables directo en el SQL, ponemos marcadores (:nombre, :correo).
             $stmt = $pdo->prepare("INSERT INTO usuarios (nombre_completo, correo, password_hash) VALUES (:nombre, :correo, :password)");
+            
+            // execute() reemplaza los marcadores con los datos reales de forma segura, escapando caracteres peligrosos.
             $stmt->execute([
                 ':nombre' => $nombre,
                 ':correo' => $correo,
                 ':password' => $password_hash
             ]);
+            
             $mensaje = "<div class='alert alert-success'>Registro exitoso. <a href='login.php'>Inicia sesión aquí</a>.</div>";
+            
         } catch (PDOException $e) {
+            // El código 23000 de SQL significa "Violación de restricción de integridad" (ej. UNIQUE falló).
+            // Esto pasa si alguien intenta registrar un correo que ya está en la base de datos.
             if ($e->getCode() == 23000) { 
                 $mensaje = "<div class='alert alert-warning'>El correo ya está registrado.</div>";
             } else {
